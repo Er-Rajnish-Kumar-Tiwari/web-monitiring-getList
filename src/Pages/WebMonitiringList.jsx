@@ -1,53 +1,64 @@
 import React, { useState } from "react";
-import { FaEnvelope, FaSearch, FaExclamationTriangle, FaRegCalendarAlt } from "react-icons/fa";
+import {
+  FaEnvelope,
+  FaSearch,
+  FaExclamationTriangle,
+  FaRegCalendarAlt,
+} from "react-icons/fa";
 import { BsGlobe } from "react-icons/bs";
-
-// Mock breach data (you can add more items if you want)
-const MOCK_BREACHES = [
-  {
-    id: 1,
-    title: "Adobe",
-    domain: "adobe.com",
-    description:
-      "In October 2013, 153 million Adobe accounts were breached with each containing an internal ID, username, email, encrypted password and a password hint in plain text. The password cryptography was poorly done and many were quickly resolved back to plain text.",
-    breachDate: "October 4, 2013",
-    status: "Verified",
-    accountsAffected: "152,445,165",
-    compromisedData: ["Email addresses", "Password hints", "Passwords", "Usernames"],
-  },
-  {
-    id: 2,
-    title: "Canva",
-    domain: "canva.com",
-    description:
-      "In May 2019, Canva suffered a data breach affecting 137 million users. Exposed data included names, email addresses, and salted passwords.",
-    breachDate: "May 24, 2019",
-    status: "Verified",
-    accountsAffected: "137,000,000",
-    compromisedData: ["Names", "Email addresses", "Passwords"],
-  },
-];
 
 const DarkWebMonitor = () => {
   const [activeTab, setActiveTab] = useState("email");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState(null);
   const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearch = () => {
+  // 🔍 Search Function
+  const handleSearch = async () => {
     if (!query.trim()) {
       alert("Please enter an email or domain to search!");
       return;
     }
 
-    // Random mock result
-    const random = Math.random();
-    if (random < 0.7) {
-      setResult(MOCK_BREACHES[Math.floor(Math.random() * MOCK_BREACHES.length)]);
-    } else {
+    setLoading(true);
+    setSearched(false);
+    setResult(null);
+
+    try {
+      // Dynamic endpoint based on tab
+      const endpoint =
+        activeTab === "domain"
+          ? `http://195.35.21.108:7001/auth/api/v1/dark-web-monitoring/domain/${query}`
+          : `http://195.35.21.108:7001/auth/api/v1/dark-web-monitoring/domain/${query}`;
+
+      const response = await fetch(endpoint);
+      const data = await response.json();
+
+      // ✅ API returns "breaches" array
+      if (data?.breaches?.length > 0) {
+        const breach = data.breaches[0];
+        setResult({
+          title: breach.Title,
+          domain: breach.Domain,
+          description: breach.Description,
+          breachDate: breach.BreachDate,
+          status: breach.IsVerified ? "Verified" : "Unverified",
+          accountsAffected: breach.PwnCount?.toLocaleString() || "N/A",
+          compromisedData: breach.DataClasses || [],
+          logo: breach.LogoPath,
+        });
+      } else {
+        setResult(null);
+      }
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      alert("Error fetching data from API.");
       setResult(null);
+    } finally {
+      setLoading(false);
+      setSearched(true);
     }
-    setSearched(true);
   };
 
   return (
@@ -108,10 +119,13 @@ const DarkWebMonitor = () => {
           />
           <button
             onClick={handleSearch}
-            className="bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 font-medium flex items-center gap-2 hover:opacity-90 transition"
+            disabled={loading}
+            className={`bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 font-medium flex items-center gap-2 hover:opacity-90 transition ${
+              loading ? "opacity-60 cursor-not-allowed" : ""
+            }`}
           >
             <FaSearch />
-            Search
+            {loading ? "Searching..." : "Search"}
           </button>
         </div>
       </div>
@@ -146,9 +160,18 @@ const DarkWebMonitor = () => {
           {/* --- Breach Info Card --- */}
           <div className="rounded-xl border border-gray-700 bg-gradient-to-b from-[#0f1726] to-[#0b1320] p-6">
             <div className="flex items-start justify-between flex-wrap gap-3">
-              <div>
-                <div className="text-xl font-semibold">{result.title}</div>
-                <div className="text-gray-400 text-sm">{result.domain}</div>
+              <div className="flex items-center gap-3">
+                {result.logo && (
+                  <img
+                    src={result.logo}
+                    alt={result.title}
+                    className="w-12 h-12 rounded-lg"
+                  />
+                )}
+                <div>
+                  <div className="text-xl font-semibold">{result.title}</div>
+                  <div className="text-gray-400 text-sm">{result.domain}</div>
+                </div>
               </div>
               <div className="text-right">
                 <p className="text-sm text-red-300">Accounts Affected</p>
@@ -163,7 +186,10 @@ const DarkWebMonitor = () => {
                 <h3 className="font-semibold text-gray-200 mb-2">
                   Description
                 </h3>
-                <p className="text-sm leading-6">{result.description}</p>
+                <p
+                  className="text-sm leading-6"
+                  dangerouslySetInnerHTML={{ __html: result.description }}
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
